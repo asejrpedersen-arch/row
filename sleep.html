@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050506">
+<meta name="color-scheme" content="dark">
+<title>Sleep · Dashboard</title>
+<script src="lock.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="sync.js" defer></script>
+<script src="topbar.js" defer></script>
+<style>
+:root {
+  --text-primary:   #FAFAFA;
+  --text-secondary: #B8B6B0;
+  --text-tertiary:  #76746E;
+  --success: #6BE3A4;
+  --warning: #F2C063;
+  --danger:  #FF6B6B;
+  --font:      -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* sleep accent palette */
+  --indigo:  #818CF8;
+  --violet:  #A78BFA;
+  --skyblue: #7DD3FC;
+  --slate:   #475569;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: #050506;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  padding: max(28px, env(safe-area-inset-top)) 20px 60px;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(circle at 78% 12%, rgba(129, 140, 248, 0.15), transparent 44%),
+    radial-gradient(circle at 16% 88%, rgba(167, 139, 250, 0.08), transparent 50%);
+  filter: blur(40px);
+  pointer-events: none; z-index: -2;
+  animation: drift 36s ease-in-out infinite alternate;
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.014) 1px, transparent 1px);
+  background-size: 3px 3px;
+  pointer-events: none; z-index: -1;
+}
+@keyframes drift {
+  0%   { transform: translate3d(0,0,0); }
+  100% { transform: translate3d(-22px, 14px, 0); }
+}
+
+.page { max-width: 900px; margin: 0 auto; }
+
+/* ── Shared design-system pieces (from template.html) ───────────── */
+.dash-title {
+  margin: 0 0 16px;
+  font-size: 28px; font-weight: 700; letter-spacing: -0.025em;
+  background: linear-gradient(180deg, #FFFFFF 0%, #C7C4BC 120%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+@media (max-width: 480px) { .dash-title { font-size: 22px; } }
+
+.section { margin-top: 8px; }
+.section-title {
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px;
+}
+.section-title::before {
+  content: ''; width: 18px; height: 1px;
+  background: var(--text-tertiary); opacity: 0.6;
+}
+.section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.08), transparent);
+}
+
+.gm-card {
+  position: relative;
+  background: rgba(255,255,255,0.04);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 14px;
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+
+.gm-eyebrow {
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-tertiary); margin-bottom: 6px;
+}
+.gm-streak {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  color: var(--text-tertiary);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px; margin-top: 14px;
+}
+.stat {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px; padding: 13px 14px;
+}
+.stat-num {
+  font-size: 20px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em; color: var(--text-primary); line-height: 1;
+}
+.stat-label {
+  margin-top: 5px;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.gm-input {
+  width: 100%; padding: 11px 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px; background: rgba(0,0,0,0.28);
+  color: var(--text-primary);
+  font-family: inherit; font-size: 14px; outline: none;
+  transition: border-color 0.2s;
+  -webkit-appearance: none; appearance: none;
+}
+.gm-input::placeholder { color: var(--text-tertiary); }
+.gm-input:focus { border-color: rgba(129,140,248,0.45); }
+
+select.gm-input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2376746E' d='M6 8 0 0h12z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+  padding-right: 32px; cursor: pointer;
+}
+.gm-add {
+  padding: 11px 20px; border: 0; border-radius: 12px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #E8E5DD 100%);
+  color: #0A0A0B; font-family: inherit; font-size: 13px; font-weight: 700;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 2px 8px rgba(0,0,0,0.35), 0 8px 22px rgba(0,0,0,0.25);
+  transition: transform 0.1s, filter 0.15s;
+}
+.gm-add:hover  { filter: brightness(1.06); transform: translateY(-1px); }
+.gm-add:active { transform: translateY(0); }
+.gm-ghost {
+  padding: 11px 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px; background: rgba(255,255,255,0.04);
+  color: var(--text-primary);
+  font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.gm-ghost:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.18); }
+
+/* ── Today snapshot ─────────────────────────────────────────────── */
+.sleep-header {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  margin-bottom: 18px;
+}
+.sleep-duration-big {
+  font-size: 52px; font-weight: 700;
+  letter-spacing: -0.05em; color: var(--text-primary); line-height: 1;
+}
+.sleep-duration-m {
+  font-size: 22px; font-weight: 500; color: var(--text-tertiary);
+  margin-left: 3px; letter-spacing: -0.01em;
+}
+.quality-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 13px; border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; border: 1px solid;
+}
+.quality-badge.excellent { background: rgba(107,227,164,0.10); border-color: rgba(107,227,164,0.25); color: #6BE3A4; }
+.quality-badge.good      { background: rgba(125,211,252,0.10); border-color: rgba(125,211,252,0.25); color: #7DD3FC; }
+.quality-badge.fair      { background: rgba(242,192,99,0.10);  border-color: rgba(242,192,99,0.25);  color: #F2C063; }
+.quality-badge.poor      { background: rgba(255,107,107,0.10); border-color: rgba(255,107,107,0.25); color: #FF6B6B; }
+
+/* Stage bar */
+.stage-bar-wrap { margin: 16px 0 8px; }
+.stage-bar {
+  height: 10px; border-radius: 8px;
+  display: flex; overflow: hidden; gap: 2px;
+}
+.stage-seg { border-radius: 4px; transition: flex 0.45s ease; min-width: 2px; }
+.stage-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+.stage-legend-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); letter-spacing: 0.04em;
+}
+.legend-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+
+/* ── Photo / log section ────────────────────────────────────────── */
+.photo-zone {
+  border: 2px dashed rgba(129,140,248,0.25);
+  border-radius: 14px; padding: 28px 20px;
+  text-align: center; cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.photo-zone:hover { border-color: rgba(129,140,248,0.55); background: rgba(129,140,248,0.04); }
+.photo-zone-icon { font-size: 30px; margin-bottom: 9px; }
+.photo-zone-title { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.photo-zone-sub   { font-size: 12px; color: var(--text-tertiary); }
+#photoFileInput { display: none; }
+
+.photo-preview-wrap { display: none; position: relative; margin-bottom: 14px; border-radius: 12px; overflow: hidden; }
+.photo-preview-wrap.show { display: block; }
+.photo-preview-img {
+  display: block; width: 100%; max-height: 260px; object-fit: contain;
+  border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);
+}
+.photo-clear {
+  position: absolute; top: 8px; right: 8px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(0,0,0,0.72); border: 1px solid rgba(255,255,255,0.14);
+  color: var(--text-primary); font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.extract-banner {
+  display: none; align-items: center; gap: 9px;
+  padding: 10px 14px; border-radius: 10px;
+  background: rgba(129,140,248,0.07);
+  border: 1px solid rgba(129,140,248,0.18);
+  font-size: 13px; color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+.extract-banner.show { display: flex; }
+.spinner {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid rgba(129,140,248,0.30); border-top-color: var(--indigo);
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Form grid */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px; margin: 16px 0 14px;
+}
+.form-field label {
+  display: block; margin-bottom: 6px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary);
+}
+.form-field input {
+  width: 100%; padding: 11px 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px; background: rgba(0,0,0,0.28);
+  color: var(--text-primary);
+  font-family: var(--font-mono); font-size: 14px; font-weight: 600;
+  outline: none; -webkit-appearance: none; appearance: none;
+  transition: border-color 0.2s;
+}
+.form-field input:focus { border-color: rgba(129,140,248,0.45); }
+.form-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.save-msg {
+  font-size: 12px; color: var(--success);
+  opacity: 0; transition: opacity 0.3s;
+}
+
+/* ── Energy forecast ────────────────────────────────────────────── */
+.energy-canvas-wrap {
+  position: relative; border-radius: 10px; overflow: hidden;
+  background: rgba(255,255,255,0.015); height: 110px;
+}
+.energy-canvas { display: block; width: 100%; height: 100%; }
+.energy-time-row {
+  display: flex; justify-content: space-between; margin-top: 5px;
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; color: var(--text-tertiary);
+}
+.energy-now-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 14px; padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.energy-now-label  { font-size: 12px; color: var(--text-tertiary); }
+.energy-now-state  { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.energy-now-pct    { margin-left: auto; font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
+
+.energy-peaks { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.energy-peak {
+  flex: 1; min-width: 120px;
+  padding: 12px 14px; border-radius: 12px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.energy-peak-type { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 4px; }
+.energy-peak-time { font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--text-primary); line-height: 1; margin-bottom: 2px; }
+.energy-peak-desc { font-size: 11px; color: var(--text-tertiary); }
+
+/* ── History ─────────────────────────────────────────────────────── */
+.history-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; margin-bottom: 6px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px;
+  transition: background 0.18s; cursor: default;
+}
+.history-row:hover { background: rgba(255,255,255,0.04); }
+.history-date {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+  color: var(--text-tertiary); width: 42px; flex-shrink: 0; text-transform: uppercase;
+}
+.history-bar-bg { flex: 1; height: 6px; border-radius: 4px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.history-bar    { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+.history-dur {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700;
+  color: var(--text-primary); width: 46px; text-align: right; flex-shrink: 0;
+}
+.history-score { width: 30px; text-align: right; flex-shrink: 0; font-size: 11px; font-weight: 700; }
+.empty-state { text-align: center; font-size: 12px; font-style: italic; color: var(--text-tertiary); padding: 18px 0; }
+
+/* ── Settings ────────────────────────────────────────────────────── */
+.settings-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.settings-row:last-of-type { border-bottom: none; padding-bottom: 0; }
+.settings-label { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.settings-desc  { font-size: 11px; color: var(--text-tertiary); }
+.settings-left  { flex: 1; min-width: 140px; }
+
+@media (max-width: 600px) {
+  body { padding: max(20px, env(safe-area-inset-top)) 14px 56px; }
+  .gm-card { padding: 16px; }
+  .sleep-duration-big { font-size: 40px; }
+  .form-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .energy-peaks { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1 class="dash-title">Sleep</h1>
+
+<!-- ═══════════════ TODAY'S SNAPSHOT ═══════════════ -->
+<div class="section">
+  <div class="section-title">Last night</div>
+  <div class="gm-card" id="todayCard">
+    <div class="empty-state">No sleep logged yet — use the form below to add today's data.</div>
+  </div>
+</div>
+
+<!-- ═══════════════ LOG SLEEP ═══════════════ -->
+<div class="section">
+  <div class="section-title">Log sleep</div>
+  <div class="gm-card">
+
+    <!-- Photo capture -->
+    <div class="photo-preview-wrap" id="previewWrap">
+      <img class="photo-preview-img" id="previewImg" src="" alt="">
+      <button class="photo-clear" id="photoClear" type="button" aria-label="Remove">×</button>
+    </div>
+    <div class="extract-banner" id="extractBanner">
+      <div class="spinner" id="extractSpinner"></div>
+      <span id="extractMsg">Reading your Apple Watch screenshot…</span>
+    </div>
+
+    <div class="photo-zone" id="photoZone">
+      <div class="photo-zone-icon">📸</div>
+      <div class="photo-zone-title">Snap or upload your Apple Watch sleep screen</div>
+      <div class="photo-zone-sub">Free on-device OCR reads the numbers — you just confirm</div>
+    </div>
+    <input type="file" id="photoFileInput" accept="image/*" capture="environment">
+
+    <!-- Manual form -->
+    <div class="gm-eyebrow" style="margin-top:20px">Sleep data</div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>Bed time</label>
+        <input type="time" id="fBed" value="23:00">
+      </div>
+      <div class="form-field">
+        <label>Wake time</label>
+        <input type="time" id="fWake" value="07:00">
+      </div>
+      <div class="form-field">
+        <label>Deep sleep (min)</label>
+        <input type="number" id="fDeep" placeholder="90" min="0" max="500">
+      </div>
+      <div class="form-field">
+        <label>REM sleep (min)</label>
+        <input type="number" id="fRem" placeholder="100" min="0" max="500">
+      </div>
+      <div class="form-field">
+        <label>Core sleep (min)</label>
+        <input type="number" id="fCore" placeholder="180" min="0" max="500">
+      </div>
+      <div class="form-field">
+        <label>Awake (min)</label>
+        <input type="number" id="fAwake" placeholder="20" min="0" max="300">
+      </div>
+      <div class="form-field">
+        <label>Avg HR (bpm)</label>
+        <input type="number" id="fHr" placeholder="52" min="30" max="120">
+      </div>
+      <div class="form-field">
+        <label>SpO₂ (%)</label>
+        <input type="number" id="fSpo2" placeholder="97" min="80" max="100" step="0.1">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="gm-add"   id="saveBtn"  type="button">Save</button>
+      <button class="gm-ghost" id="clearBtn" type="button">Clear form</button>
+      <span class="save-msg" id="saveMsg">✓ Saved</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════ ENERGY FORECAST ═══════════════ -->
+<div class="section">
+  <div class="section-title">Energy forecast · today</div>
+  <div class="gm-card" id="energyCard">
+    <div class="empty-state" id="energyEmpty">Log today's sleep above to see your energy curve.</div>
+    <div id="energyContent" style="display:none">
+      <div class="energy-canvas-wrap">
+        <canvas class="energy-canvas" id="energyCanvas"></canvas>
+      </div>
+      <div class="energy-time-row">
+        <span>6 AM</span><span>9 AM</span><span>12 PM</span><span>3 PM</span><span>6 PM</span><span>9 PM</span>
+      </div>
+      <div class="energy-now-row" id="energyNowRow">
+        <div>
+          <div class="energy-now-label">Right now</div>
+          <div class="energy-now-state" id="energyNowState">—</div>
+        </div>
+        <div class="energy-now-pct" id="energyNowPct">—</div>
+      </div>
+      <div class="energy-peaks" id="energyPeaks"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ HISTORY ═══════════════ -->
+<div class="section">
+  <div class="section-title">History · last 14 nights</div>
+  <div class="gm-card">
+    <div id="historyList"><div class="empty-state">No history yet.</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ SETTINGS ═══════════════ -->
+<div class="section">
+  <div class="section-title">Settings</div>
+  <div class="gm-card">
+    <div class="settings-row">
+      <div class="settings-left">
+        <div class="settings-label">Sleep target</div>
+        <div class="settings-desc">Hours per night you aim for</div>
+      </div>
+      <input class="gm-input" id="sTarget" type="number" min="5" max="10" step="0.5" value="8"
+             style="width:72px;text-align:center;flex:unset">
+      <span style="font-size:13px;color:var(--text-tertiary)">h</span>
+    </div>
+    <div class="settings-row">
+      <div class="settings-left">
+        <div class="settings-label">Chronotype</div>
+        <div class="settings-desc">When you naturally feel most alert</div>
+      </div>
+      <select class="gm-input" id="sChronotype" style="width:148px;flex:unset">
+        <option value="early">Early bird</option>
+        <option value="normal" selected>Normal</option>
+        <option value="late">Night owl</option>
+      </select>
+    </div>
+    <div style="margin-top:14px;display:flex;align-items:center;gap:10px">
+      <button class="gm-add" id="saveSettings" type="button">Save settings</button>
+      <span class="save-msg" id="settingsMsg">✓ Saved</span>
+    </div>
+  </div>
+</div>
+
+</div><!-- /.page -->
+
+<script>
+(function () {
+'use strict';
+
+// ── Keys ─────────────────────────────────────────────────────────
+const LOG_KEY  = 'sleep:log';
+const CFG_KEY  = 'sleep:settings';
+
+// ── Storage helpers ───────────────────────────────────────────────
+function loadLog()  { try { return JSON.parse(localStorage.getItem(LOG_KEY))  || []; } catch { return []; } }
+function loadCfg()  {
+  const def = { targetHours: 8, chronotype: 'normal' };
+  try { return Object.assign(def, JSON.parse(localStorage.getItem(CFG_KEY))); } catch { return def; }
+}
+function saveLog(l) { localStorage.setItem(LOG_KEY, JSON.stringify(l)); }
+function saveCfg(c) { localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
+
+// ── Date helpers ──────────────────────────────────────────────────
+function todayKey() {
+  const d = new Date();
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+function pad(n) { return String(n).padStart(2,'0'); }
+function parseToMins(t) { const [h,m] = (t||'00:00').split(':').map(Number); return h*60+m; }
+function fmtAmPm(h, m) {
+  const ap = h < 12 ? 'AM' : 'PM';
+  return ((h%12)||12) + (m ? ':'+pad(m) : '') + ' ' + ap;
+}
+function minsToHM(v) {
+  if (!v) return '—';
+  const h = Math.floor(v/60), m = v%60;
+  return h + 'h' + (m ? ' ' + m + 'm' : '');
+}
+function clamp(v,lo,hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ── Sleep score (0–100) ───────────────────────────────────────────
+function score(e) {
+  const cfg = loadCfg();
+  const target = (cfg.targetHours || 8) * 60;
+  const total  = (e.deep||0) + (e.rem||0) + (e.core||0);
+  if (!total) return 0;
+
+  // Duration score
+  const r = total / target;
+  const dur = r >= 1 ? 100 : r >= .9 ? 90 : r >= .8 ? 78 : r >= .7 ? 62 : r >= .6 ? 48 : 32;
+
+  // Stage composition (deep 13–23 %, REM 20–26 % is ideal)
+  const dPct = (e.deep||0) / total;
+  const rPct = (e.rem||0)  / total;
+  const dQ = (dPct >= .13 && dPct <= .28) ? 100 : dPct < .09 ? 48 : 74;
+  const rQ = (rPct >= .18 && rPct <= .28) ? 100 : rPct < .12 ? 52 : 76;
+
+  // Awake penalty (5 min = -1 pt, max -20)
+  const pen = Math.min(20, Math.round((e.awake||0) / 5));
+
+  return clamp(Math.round(dur * .50 + dQ * .25 + rQ * .25 - pen), 0, 100);
+}
+
+function qualityOf(s) {
+  if (s >= 85) return { text:'Excellent', cls:'excellent', glyph:'✦' };
+  if (s >= 70) return { text:'Good',      cls:'good',      glyph:'●' };
+  if (s >= 50) return { text:'Fair',      cls:'fair',      glyph:'◐' };
+  return             { text:'Poor',      cls:'poor',      glyph:'◯' };
+}
+
+// ── Energy model ──────────────────────────────────────────────────
+// Simplified two-process model:
+// Process S (sleep pressure) clears during sleep, builds during wake.
+// Process C (circadian) modulates alertness over 24 h.
+// Both combined give the familiar: morning rise → noon dip → afternoon peak → evening decline.
+function energyAt(wakeMinutes, qualityScore, chronotype) {
+  // Chronotype shifts the curve L/R: early=-45 min, late=+60 min
+  const shift = chronotype === 'early' ? -45 : chronotype === 'late' ? 60 : 0;
+  const t = wakeMinutes - shift; // adjusted minutes since wake
+
+  let base;
+  if      (t <   0) base = 18;
+  else if (t <  30) base = 18 + t * 0.60;
+  else if (t <  90) base = 36 + (t-30) * 0.57;
+  else if (t < 210) base = 70 + (t-90) * 0.17;
+  else if (t < 300) base = 90 + (t-210) * 0.04;
+  else if (t < 360) base = 94 - (t-300) * 0.12;   // pre-noon slight dip
+  else if (t < 450) base = 87 - (t-360) * 0.44;   // post-lunch dip
+  else if (t < 510) base = 47 + (t-450) * 0.48;   // recovery
+  else if (t < 600) base = 76 - (t-510) * 0.06;   // afternoon cruise
+  else if (t < 690) base = 70 - (t-600) * 0.30;   // evening slide
+  else if (t < 810) base = 43 - (t-690) * 0.20;   // wind-down
+  else              base = Math.max(12, 19 - (t-810) * 0.18);
+
+  // Scale by quality: poor sleep caps the peak
+  const mult = 0.55 + (qualityScore / 100) * 0.45;
+  return clamp(Math.round(base * mult), 5, 100);
+}
+
+function buildPoints(waketime, qs, chronotype) {
+  const wakeMins = parseToMins(waketime);
+  const pts = [];
+  for (let h = 6; h <= 24; h++) {
+    pts.push({ hour: h, energy: energyAt(h*60 - wakeMins, qs, chronotype) });
+  }
+  return pts;
+}
+
+// ── Render helpers ────────────────────────────────────────────────
+function renderToday() {
+  const log = loadLog();
+  const e   = log.find(x => x.dateKey === todayKey());
+  const card = document.getElementById('todayCard');
+
+  if (!e) {
+    card.innerHTML = '<div class="empty-state">No sleep logged yet — use the form below to add today\'s data.</div>';
+    showEnergyEmpty();
+    return;
+  }
+
+  const total  = (e.deep||0) + (e.rem||0) + (e.core||0);
+  const totalH = Math.floor(total/60), totalM = total%60;
+  const sc     = score(e);
+  const q      = qualityOf(sc);
+
+  const dP = total ? Math.round((e.deep||0)/total*100) : 0;
+  const rP = total ? Math.round((e.rem||0)/total*100)  : 0;
+  const cP = total ? Math.round((e.core||0)/total*100) : 0;
+  const aP = (e.awake && total) ? Math.round(e.awake/(total+e.awake)*100) : 0;
+
+  card.innerHTML = `
+<div class="sleep-header">
+  <div>
+    <div class="gm-eyebrow">Last night</div>
+    <div class="sleep-duration-big">${totalH}h<span class="sleep-duration-m">${totalM ? totalM+'m' : ''}</span></div>
+  </div>
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+    <div class="quality-badge ${q.cls}">${q.glyph} ${q.text} · ${sc}</div>
+    ${e.spo2 ? `<span class="gm-streak">🫁 SpO₂ ${e.spo2}%</span>` : ''}
+  </div>
+</div>
+${total ? `
+<div class="stage-bar-wrap">
+  <div class="stage-bar">
+    ${dP ? `<div class="stage-seg" style="flex:${dP};background:#6366F1"></div>` : ''}
+    ${rP ? `<div class="stage-seg" style="flex:${rP};background:#A78BFA"></div>` : ''}
+    ${cP ? `<div class="stage-seg" style="flex:${cP};background:#7DD3FC"></div>` : ''}
+    ${aP ? `<div class="stage-seg" style="flex:${aP};background:#475569"></div>` : ''}
+  </div>
+  <div class="stage-legend">
+    ${e.deep  ? `<div class="stage-legend-item"><span class="legend-dot" style="background:#6366F1"></span>Deep ${minsToHM(e.deep)}</div>` : ''}
+    ${e.rem   ? `<div class="stage-legend-item"><span class="legend-dot" style="background:#A78BFA"></span>REM ${minsToHM(e.rem)}</div>`   : ''}
+    ${e.core  ? `<div class="stage-legend-item"><span class="legend-dot" style="background:#7DD3FC"></span>Core ${minsToHM(e.core)}</div>` : ''}
+    ${e.awake ? `<div class="stage-legend-item"><span class="legend-dot" style="background:#475569"></span>Awake ${minsToHM(e.awake)}</div>` : ''}
+  </div>
+</div>` : ''}
+<div class="stat-grid">
+  <div class="stat"><div class="stat-num">${e.bedtime  || '—'}</div><div class="stat-label">Bed time</div></div>
+  <div class="stat"><div class="stat-num">${e.waketime || '—'}</div><div class="stat-label">Wake time</div></div>
+  ${e.hr  ? `<div class="stat"><div class="stat-num">${e.hr}</div><div class="stat-label">Avg HR</div></div>`   : ''}
+  <div class="stat"><div class="stat-num">${sc}</div><div class="stat-label">Sleep score</div></div>
+</div>`;
+
+  renderEnergy(e, sc);
+}
+
+function showEnergyEmpty() {
+  document.getElementById('energyEmpty').style.display   = '';
+  document.getElementById('energyContent').style.display = 'none';
+}
+
+function renderEnergy(e, sc) {
+  const cfg = loadCfg();
+  document.getElementById('energyEmpty').style.display   = 'none';
+  document.getElementById('energyContent').style.display = '';
+
+  const waketime = e.waketime || '07:00';
+  const pts = buildPoints(waketime, sc, cfg.chronotype);
+
+  // Draw canvas
+  const canvas = document.getElementById('energyCanvas');
+  // Ensure canvas has layout dimensions before drawing
+  requestAnimationFrame(() => drawCanvas(canvas, pts, waketime, sc, cfg.chronotype));
+}
+
+function drawCanvas(canvas, pts, waketime, sc, chronotype) {
+  const cfg = loadCfg();
+  const dpr = window.devicePixelRatio || 1;
+  const W   = canvas.offsetWidth;
+  const H   = canvas.offsetHeight || 110;
+  if (!W) return; // not visible yet; retry once
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const pad = { t: 8, b: 8 };
+  const chartH = H - pad.t - pad.b;
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
+  grad.addColorStop(0,   'rgba(129,140,248,0.40)');
+  grad.addColorStop(0.7, 'rgba(129,140,248,0.08)');
+  grad.addColorStop(1,   'rgba(129,140,248,0.00)');
+
+  function ptX(i)   { return (i / (pts.length - 1)) * W; }
+  function ptY(eng) { return pad.t + chartH - (eng / 100) * chartH; }
+
+  ctx.beginPath();
+  pts.forEach((p, i) => i === 0 ? ctx.moveTo(ptX(i), ptY(p.energy)) : ctx.lineTo(ptX(i), ptY(p.energy)));
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+
+  // Curve line
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(129,140,248,0.95)';
+  ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  pts.forEach((p, i) => i === 0 ? ctx.moveTo(ptX(i), ptY(p.energy)) : ctx.lineTo(ptX(i), ptY(p.energy)));
+  ctx.stroke();
+
+  // "Now" marker
+  const now = new Date();
+  const nowH = now.getHours() + now.getMinutes()/60;
+  if (nowH >= 6 && nowH <= 24) {
+    const nx = ((nowH - 6) / 18) * W;
+    const wakeMins = parseToMins(waketime);
+    const nowEng = energyAt(now.getHours()*60 + now.getMinutes() - wakeMins, sc, chronotype);
+    const ny = ptY(nowEng);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.38)';
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(nx, 0); ctx.lineTo(nx, H); ctx.stroke();
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.arc(nx, ny, 4, 0, Math.PI*2); ctx.fill();
+  }
+
+  // "Now" label + peaks
+  const cfg2 = loadCfg();
+  const wakeMins2 = parseToMins(waketime);
+  const curMin    = now.getHours()*60 + now.getMinutes();
+  const curEng    = energyAt(curMin - wakeMins2, sc, cfg2.chronotype);
+
+  const stateLabel = curEng >= 82 ? 'Peak — best time for hard work'
+                   : curEng >= 68 ? 'High energy'
+                   : curEng >= 50 ? 'Moderate — good for routine tasks'
+                   : curEng >= 32 ? 'Low — take a break or walk'
+                   : 'Wind-down — rest soon';
+  document.getElementById('energyNowState').textContent = stateLabel;
+  const pctEl = document.getElementById('energyNowPct');
+  pctEl.textContent  = curEng + '%';
+  pctEl.style.color  = curEng >= 75 ? 'var(--success)' : curEng >= 48 ? 'var(--warning)' : 'var(--danger)';
+
+  // Peak windows
+  const focusPt    = pts.filter(p => p.hour >= 7  && p.hour <= 14).reduce((a,b)=>a.energy>b.energy?a:b, {energy:0,hour:9});
+  const exercisePt = pts.filter(p => p.hour >= 14 && p.hour <= 20).reduce((a,b)=>a.energy>b.energy?a:b, {energy:0,hour:17});
+  const windArr    = pts.filter(p => p.hour >= 20 && p.energy < 48);
+  const windHour   = windArr.length ? windArr[0].hour : 22;
+
+  document.getElementById('energyPeaks').innerHTML = `
+<div class="energy-peak">
+  <div class="energy-peak-type">🧠 Best focus</div>
+  <div class="energy-peak-time">${fmtAmPm(focusPt.hour, 0)}</div>
+  <div class="energy-peak-desc">Deep work, complex tasks</div>
+</div>
+<div class="energy-peak">
+  <div class="energy-peak-type">💪 Best exercise</div>
+  <div class="energy-peak-time">${fmtAmPm(exercisePt.hour, 0)}</div>
+  <div class="energy-peak-desc">Strength &amp; cardio</div>
+</div>
+<div class="energy-peak">
+  <div class="energy-peak-type">🌙 Wind down</div>
+  <div class="energy-peak-time">${fmtAmPm(windHour, 0)}</div>
+  <div class="energy-peak-desc">Screens off, relax</div>
+</div>`;
+}
+
+function renderHistory() {
+  const log = loadLog().slice(0, 14);
+  const el  = document.getElementById('historyList');
+  if (!log.length) { el.innerHTML = '<div class="empty-state">No history yet.</div>'; return; }
+
+  const cfg    = loadCfg();
+  const target = (cfg.targetHours||8)*60;
+  const days   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  el.innerHTML = log.map(e => {
+    const total = (e.deep||0)+(e.rem||0)+(e.core||0);
+    const sc    = score(e);
+    const barW  = Math.min(100, Math.round(total/target*100));
+    const barC  = sc>=80 ? '#6BE3A4' : sc>=62 ? '#7DD3FC' : sc>=45 ? '#F2C063' : '#FF6B6B';
+    const scC   = sc>=80 ? 'var(--success)' : sc>=62 ? '#7DD3FC' : sc>=45 ? 'var(--warning)' : 'var(--danger)';
+    const d     = new Date(e.dateKey + 'T12:00');
+    return `<div class="history-row">
+  <div class="history-date">${days[d.getDay()]} ${d.getDate()}</div>
+  <div class="history-bar-bg"><div class="history-bar" style="width:${barW}%;background:${barC}"></div></div>
+  <div class="history-dur">${minsToHM(total)}</div>
+  <div class="history-score" style="color:${scC}">${sc}</div>
+</div>`;
+  }).join('');
+}
+
+// ── Form helpers ──────────────────────────────────────────────────
+function formEntry() {
+  return {
+    dateKey:  todayKey(),
+    bedtime:  document.getElementById('fBed').value,
+    waketime: document.getElementById('fWake').value,
+    deep:     parseInt(document.getElementById('fDeep').value)  || 0,
+    rem:      parseInt(document.getElementById('fRem').value)   || 0,
+    core:     parseInt(document.getElementById('fCore').value)  || 0,
+    awake:    parseInt(document.getElementById('fAwake').value) || 0,
+    hr:       parseInt(document.getElementById('fHr').value)    || 0,
+    spo2:     parseFloat(document.getElementById('fSpo2').value) || 0,
+  };
+}
+function fillForm(e) {
+  if (e.bedtime)  document.getElementById('fBed').value   = e.bedtime;
+  if (e.waketime) document.getElementById('fWake').value  = e.waketime;
+  if (e.deep)     document.getElementById('fDeep').value  = e.deep;
+  if (e.rem)      document.getElementById('fRem').value   = e.rem;
+  if (e.core)     document.getElementById('fCore').value  = e.core;
+  if (e.awake)    document.getElementById('fAwake').value = e.awake;
+  if (e.hr)       document.getElementById('fHr').value    = e.hr;
+  if (e.spo2)     document.getElementById('fSpo2').value  = e.spo2;
+}
+function clearForm() {
+  ['fDeep','fRem','fCore','fAwake','fHr','fSpo2'].forEach(id => { document.getElementById(id).value = ''; });
+}
+
+function flashMsg(id) {
+  const el = document.getElementById(id);
+  el.style.opacity = 1;
+  setTimeout(() => el.style.opacity = 0, 2200);
+}
+
+// ── Save / clear buttons ──────────────────────────────────────────
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const e   = formEntry();
+  const log = loadLog().filter(x => x.dateKey !== e.dateKey);
+  log.unshift(e);
+  saveLog(log);
+  renderAll();
+  flashMsg('saveMsg');
+});
+document.getElementById('clearBtn').addEventListener('click', clearForm);
+
+// ── Photo capture ─────────────────────────────────────────────────
+const photoZone  = document.getElementById('photoZone');
+const fileInput  = document.getElementById('photoFileInput');
+const previewW   = document.getElementById('previewWrap');
+const previewI   = document.getElementById('previewImg');
+const photoClear = document.getElementById('photoClear');
+const bannerEl   = document.getElementById('extractBanner');
+const bannerMsg  = document.getElementById('extractMsg');
+const spinnerEl  = document.getElementById('extractSpinner');
+
+photoZone.addEventListener('click', () => fileInput.click());
+photoZone.addEventListener('dragover', e => { e.preventDefault(); photoZone.style.borderColor = 'rgba(129,140,248,0.65)'; });
+photoZone.addEventListener('dragleave', () => { photoZone.style.borderColor = ''; });
+photoZone.addEventListener('drop', e => {
+  e.preventDefault(); photoZone.style.borderColor = '';
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) processPhoto(f);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) processPhoto(fileInput.files[0]); });
+
+photoClear.addEventListener('click', () => {
+  previewW.classList.remove('show');
+  previewI.src = '';
+  fileInput.value = '';
+  photoZone.style.display = '';
+});
+
+// ── OCR parsing helpers ───────────────────────────────────────────
+function parseDur(s) {
+  // "1h 15m" → 75, "45m" / "45 min" → 45, "7h" → 420, "0:45" → 45
+  if (!s) return 0;
+  const hm = s.match(/(\d+)\s*h\s*(\d+)\s*m/i);    if (hm)  return +hm[1]*60 + +hm[2];
+  const h  = s.match(/(\d+)\s*h(?!r)/i);            if (h)   return +h[1]*60;
+  const m  = s.match(/(\d+)\s*m(?:in)?(?!\s*s)/i);  if (m)   return +m[1];
+  const cm = s.match(/(\d+):(\d{2})$/);             if (cm)  return +cm[1]*60 + +cm[2];
+  return 0;
+}
+function parseTime24(s) {
+  if (!s) return null;
+  const t = s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!t) return null;
+  let h = +t[1], m = +t[2];
+  const ap = (t[3]||'').toUpperCase();
+  if (ap === 'PM' && h !== 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  return pad(h) + ':' + pad(m);
+}
+function parseSleepText(raw) {
+  const out  = {};
+  const text = raw.replace(/\r/g,'');
+  const lines = text.split('\n').map(l => l.trim());
+
+  // Walk lines looking for keyword + nearby value
+  for (let i = 0; i < lines.length; i++) {
+    const lo  = lines[i].toLowerCase();
+    const nxt = lines[i+1] || '';
+    const blk = lo + ' ' + nxt.toLowerCase();
+
+    // Stage durations — keyword then next line (or same line) has the value
+    if (/\bdeep\b/.test(lo) && !out.deep) {
+      out.deep = parseDur(nxt) || parseDur(lo);
+    }
+    if (/\brem\b/.test(lo) && !out.rem) {
+      out.rem = parseDur(nxt) || parseDur(lo);
+    }
+    if (/\bcore\b|\blight\b/.test(lo) && !out.core) {
+      out.core = parseDur(nxt) || parseDur(lo);
+    }
+    if (/\bawake\b/.test(lo) && !out.awake) {
+      out.awake = parseDur(nxt) || parseDur(lo);
+    }
+
+    // "IN BED 10:45 PM - 6:47 AM" or "10:45 PM – 6:47 AM"
+    const range = blk.match(/(\d{1,2}:\d{2}\s*(?:AM|PM)?)\s*[-–]\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i);
+    if (range) {
+      out.bedtime  = out.bedtime  || parseTime24(range[1]);
+      out.waketime = out.waketime || parseTime24(range[2]);
+    }
+
+    // Bed / sleep start time on its own
+    if (/bed\s*time|sleep\s*start|went\s*to\s*bed/i.test(lo) && !out.bedtime) {
+      const tm = (nxt + ' ' + lo).match(/\d{1,2}:\d{2}\s*(?:AM|PM)?/i);
+      if (tm) out.bedtime = parseTime24(tm[0]);
+    }
+    // Wake time
+    if (/wake\s*time|woke\s*up|alarm/i.test(lo) && !out.waketime) {
+      const tm = (nxt + ' ' + lo).match(/\d{1,2}:\d{2}\s*(?:AM|PM)?/i);
+      if (tm) out.waketime = parseTime24(tm[0]);
+    }
+
+    // Heart rate "52 BPM"
+    if (/heart\s*rate|avg\s*hr|\bbpm\b/i.test(blk) && !out.hr) {
+      const hr = blk.match(/(\d+)\s*bpm/i) || blk.match(/(\d{2,3})\s*b/i);
+      if (hr && +hr[1] >= 30 && +hr[1] <= 120) out.hr = +hr[1];
+    }
+
+    // SpO2 / blood oxygen "97%" or "97 %"
+    if (/oxygen|spo2|sp02|spo₂/i.test(lo) && !out.spo2) {
+      const pct = (nxt + lo).match(/(\d{2,3}(?:\.\d)?)\s*%/);
+      if (pct && +pct[1] >= 80) out.spo2 = parseFloat(pct[1]);
+    }
+  }
+
+  // Fallback: scan entire text for lonely "97%" that looks like SpO2
+  if (!out.spo2) {
+    const pcts = [...text.matchAll(/(\d{2,3}(?:\.\d)?)\s*%/g)].map(m => parseFloat(m[1]));
+    const spo2 = pcts.find(v => v >= 88 && v <= 100);
+    if (spo2) out.spo2 = spo2;
+  }
+
+  return out;
+}
+
+async function processPhoto(file) {
+  previewI.src = URL.createObjectURL(file);
+  previewW.classList.add('show');
+  photoZone.style.display = 'none';
+
+  showBanner(true, 'Running OCR on your screenshot — this takes a few seconds…');
+
+  try {
+    const worker = await Tesseract.createWorker('eng');
+    const { data: { text } } = await worker.recognize(file);
+    await worker.terminate();
+
+    const extracted = parseSleepText(text);
+    const anyFound  = Object.values(extracted).some(v => v);
+
+    if (anyFound) {
+      fillForm(extracted);
+      const fields = Object.keys(extracted).filter(k => extracted[k]).join(', ');
+      showBanner(false, '✓ Found: ' + fields + ' — review below and tap Save.');
+    } else {
+      showBanner(false, '⚠ OCR ran but couldn\'t match sleep fields. Fill the form manually — screenshots work best.');
+    }
+    setTimeout(() => bannerEl.classList.remove('show'), 4500);
+  } catch (err) {
+    showBanner(false, '⚠ OCR failed (' + (err.message||'unknown') + '). Fill manually.');
+    setTimeout(() => bannerEl.classList.remove('show'), 5000);
+  }
+}
+
+function showBanner(spinning, msg) {
+  bannerEl.classList.add('show');
+  bannerMsg.textContent   = msg;
+  spinnerEl.style.display = spinning ? '' : 'none';
+}
+
+// ── Settings form ─────────────────────────────────────────────────
+function loadSettingsForm() {
+  const c = loadCfg();
+  document.getElementById('sTarget').value     = c.targetHours || 8;
+  document.getElementById('sChronotype').value = c.chronotype  || 'normal';
+}
+document.getElementById('saveSettings').addEventListener('click', () => {
+  saveCfg({
+    targetHours: parseFloat(document.getElementById('sTarget').value) || 8,
+    chronotype:  document.getElementById('sChronotype').value,
+  });
+  renderAll();
+  flashMsg('settingsMsg');
+});
+
+// ── Cloud sync ────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.initCloudSync) {
+    window.initCloudSync({
+      appKey:     'sleep',
+      syncedKeys: [LOG_KEY, CFG_KEY],
+      onApplied:  renderAll,
+    });
+  }
+});
+
+// ── Boot ──────────────────────────────────────────────────────────
+function renderAll() {
+  renderToday();
+  renderHistory();
+}
+
+// Pre-fill form if today already logged
+const todayEntry = loadLog().find(e => e.dateKey === todayKey());
+if (todayEntry) fillForm(todayEntry);
+
+loadSettingsForm();
+renderAll();
+
+// Redraw canvas on resize
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const log  = loadLog();
+    const e    = log.find(x => x.dateKey === todayKey());
+    if (e) renderEnergy(e, score(e));
+  }, 120);
+});
+
+})();
+</script>
+</body>
+</html>
