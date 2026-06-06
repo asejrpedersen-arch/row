@@ -18,13 +18,25 @@
   const css = `
 .topbar {
   position: sticky; top: 0; z-index: 40;
-  display: flex; justify-content: flex-end; align-items: center;
+  display: flex; justify-content: space-between; align-items: center;
   gap: 8px;
   padding: max(10px, env(safe-area-inset-top)) 14px 8px;
   background: #0a0a0b;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
 }
+.topbar-home-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px; text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.topbar-home-btn:hover { background: rgba(255, 255, 255, 0.08); }
+.topbar-home-icon { font-size: 18px; line-height: 1; filter: grayscale(100%) brightness(1.4); opacity: 0.85; }
 .topbar-water-wrap { display: flex; align-items: stretch; }
 .topbar-water-pill {
   display: inline-flex; align-items: center; gap: 8px;
@@ -150,16 +162,21 @@ body.topbar-modal-open { overflow: hidden; touch-action: none; }
 
   const topbarHtml = `
 <header class="topbar" id="topbar" role="navigation" aria-label="Quick actions">
-  <div class="topbar-water-wrap">
-    <a href="health.html#water" class="topbar-water-pill" id="topbarWater" aria-label="Water progress">
-      <span class="topbar-pill-dot"></span>
-      <span class="topbar-pill-count" id="topbarWaterCount">0/0</span>
-    </a>
-    <button class="topbar-water-add" id="topbarWaterAdd" aria-label="Log one drink" type="button">+</button>
-  </div>
-  <a href="finance.html" class="topbar-finance-btn" id="topbarFinance" aria-label="Finance">
-    <span class="topbar-finance-icon">📊</span>
+  <a href="index.html" class="topbar-home-btn" aria-label="Dashboard hub">
+    <span class="topbar-home-icon">⌂</span>
   </a>
+  <div style="display:flex;align-items:stretch;gap:8px;margin-left:auto">
+    <div class="topbar-water-wrap">
+      <a href="health.html#water" class="topbar-water-pill" id="topbarWater" aria-label="Water progress">
+        <span class="topbar-pill-dot"></span>
+        <span class="topbar-pill-count" id="topbarWaterCount">0/0</span>
+      </a>
+      <button class="topbar-water-add" id="topbarWaterAdd" aria-label="Log one drink" type="button">+</button>
+    </div>
+    <a href="finance.html" class="topbar-finance-btn" id="topbarFinance" aria-label="Finance">
+      <span class="topbar-finance-icon">📊</span>
+    </a>
+  </div>
 </header>`;
 
   const bottombarHtml = `
