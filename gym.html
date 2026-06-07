@@ -1716,6 +1716,18 @@ img, video, canvas, svg { max-width: 100%; }
         (x === 'rest' ? 'Rest' : x.charAt(0).toUpperCase() + x.slice(1))
       );
     }
+    // Migrate: if saved split still has Push/Pull/Legs, upgrade to Upper/Rest
+    if (s.splitRotation.some(x => ['push','pull','legs'].includes(x.toLowerCase()))) {
+      s.splitRotation = ['Upper', 'Rest'];
+      s.days         = [{ id: 'upper', name: 'Upper' }];
+      s.splitAnchor  = { date: '2026-06-06', index: 1 }; // June 6 = Rest (index 1)
+      s.filterDay    = 'upper';
+      if (Array.isArray(s.exercises)) {
+        s.exercises = s.exercises
+          .filter(ex => (ex.day || '').toLowerCase() !== 'legs')
+          .map(ex => Object.assign({}, ex, { day: 'upper' }));
+      }
+    }
     if (!s.splitAnchor || !s.splitAnchor.date || s.splitAnchor.index == null) {
       // Map old anchor-by-id to new anchor-by-index, or default to today=index 0.
       const oldId = (CONFIG.splitAnchor && CONFIG.splitAnchor.splitId) || null;
