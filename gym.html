@@ -28,6 +28,9 @@ const CONFIG = {
     { id: "comm",  name: "Commercial Gym" }
   ],
 
+  // Bump this number to force all browsers to re-apply the split config.
+  splitVersion: 3,
+
   // Training split.
   days: [
     { id: "upper", name: "Upper" }
@@ -36,10 +39,10 @@ const CONFIG = {
   // Upper body every other day, rest in between.
   splitRotation: ["upper", "rest"],
 
-  // Anchor: pair a real calendar date with which split day fell on it.
+  // Anchor: June 7 = Upper day (so June 6 = Rest, June 8 = Rest, June 9 = Upper …)
   splitAnchor: {
-    date: "2026-06-06",
-    splitId: "rest"
+    date: "2026-06-07",
+    splitId: "upper"
   },
 
   // Progression rule: hit this many reps on the top set → coach tells you
@@ -1716,12 +1719,14 @@ img, video, canvas, svg { max-width: 100%; }
         (x === 'rest' ? 'Rest' : x.charAt(0).toUpperCase() + x.slice(1))
       );
     }
-    // Migrate: if saved split still has Push/Pull/Legs, upgrade to Upper/Rest
-    if (s.splitRotation.some(x => ['push','pull','legs'].includes(x.toLowerCase()))) {
+    // Version-gated split reset — runs whenever CONFIG.splitVersion is bumped.
+    if ((s.splitVersion || 0) < CONFIG.splitVersion) {
+      s.splitVersion  = CONFIG.splitVersion;
       s.splitRotation = ['Upper', 'Rest'];
-      s.days         = [{ id: 'upper', name: 'Upper' }];
-      s.splitAnchor  = { date: '2026-06-06', index: 1 }; // June 6 = Rest (index 1)
-      s.filterDay    = 'upper';
+      s.days          = [{ id: 'upper', name: 'Upper' }];
+      // June 7 = Upper (index 0) → June 6 works out to Rest (index 1)
+      s.splitAnchor   = { date: '2026-06-07', index: 0 };
+      s.filterDay     = 'upper';
       if (Array.isArray(s.exercises)) {
         s.exercises = s.exercises
           .filter(ex => (ex.day || '').toLowerCase() !== 'legs')
