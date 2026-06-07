@@ -29,7 +29,7 @@ const CONFIG = {
   ],
 
   // Bump this number to force all browsers to re-apply the split config.
-  splitVersion: 3,
+  splitVersion: 4,
 
   // Training split.
   days: [
@@ -39,10 +39,10 @@ const CONFIG = {
   // Upper body every other day, rest in between.
   splitRotation: ["upper", "rest"],
 
-  // Anchor: June 7 = Upper day (so June 6 = Rest, June 8 = Rest, June 9 = Upper …)
+  // Anchor: June 6 = Rest (index 1 in ["Upper","Rest"])
   splitAnchor: {
-    date: "2026-06-07",
-    splitId: "upper"
+    date: "2026-06-06",
+    splitId: "rest"
   },
 
   // Progression rule: hit this many reps on the top set → coach tells you
@@ -1724,8 +1724,8 @@ img, video, canvas, svg { max-width: 100%; }
       s.splitVersion  = CONFIG.splitVersion;
       s.splitRotation = ['Upper', 'Rest'];
       s.days          = [{ id: 'upper', name: 'Upper' }];
-      // June 7 = Upper (index 0) → June 6 works out to Rest (index 1)
-      s.splitAnchor   = { date: '2026-06-07', index: 0 };
+      // Anchor directly on June 6 = Rest (index 1). No offset math needed.
+      s.splitAnchor   = { date: '2026-06-06', index: 1 };
       s.filterDay     = 'upper';
       if (Array.isArray(s.exercises)) {
         s.exercises = s.exercises
