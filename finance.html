@@ -3377,15 +3377,101 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 </script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-  if (typeof initCloudSync !== 'function') return;
-  initCloudSync({
-    appKey: 'finance',
-    syncedKeys: ['subs', 'wishlist', 'incoming_orders', 'nw_currency', 'nw:activity', 'nw:history'],
-    syncedPrefixes: ['nw:'],
-    onApplied: function () { window.location.reload(); }
-  });
-});
+(function () {
+  const SB_URL = 'https://dnpoylwzgxfpzawbdxdg.supabase.co';
+  const SB_KEY = 'sb_publishable_9nJ5thXe-ijR5hqeYfH91g_YXFJxDsx';
+  const ROW    = 'finance';
+
+  const EXACT = new Set(['subs','wishlist','incoming_orders','nw_currency','nw:activity','nw:history']);
+  function isFinKey(k) { return k && (EXACT.has(k) || k.startsWith('nw:')); }
+
+  function collectAll() {
+    const out = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!isFinKey(k)) continue;
+      try { out[k] = JSON.parse(localStorage.getItem(k)); } catch (e) { out[k] = localStorage.getItem(k); }
+    }
+    return out;
+  }
+
+  let lastJson = null;
+  let pushTimer = null;
+
+  async function push() {
+    const state = collectAll();
+    const j = JSON.stringify(state);
+    if (j === lastJson) return;
+    try {
+      const r = await fetch(SB_URL + '/rest/v1/app_state?on_conflict=key', {
+        method: 'POST',
+        headers: {
+          'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+          'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify({ key: ROW, data: state, updated_at: new Date().toISOString() }),
+      });
+      if (r.ok) { lastJson = j; console.log('[finance sync] pushed', Object.keys(state).length, 'keys'); }
+      else { console.warn('[finance sync] push failed', r.status, await r.text().catch(() => '')); }
+    } catch (e) { console.warn('[finance sync] push error', e.message); }
+  }
+
+  function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(push, 400); }
+
+  // Intercept writes so any storeSet triggers a push
+  const _origSet = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function (k, v) {
+    _origSet(k, v);
+    try { if (isFinKey(k)) schedulePush(); } catch (e) {}
+  };
+
+  // Pull on load, reload if remote is newer
+  async function pull() {
+    try {
+      const r = await fetch(
+        SB_URL + '/rest/v1/app_state?select=data&key=eq.' + ROW + '&limit=1',
+        { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } }
+      );
+      if (!r.ok) { console.warn('[finance sync] pull failed', r.status); return; }
+      const rows = await r.json();
+      const remote = rows && rows[0] && rows[0].data;
+      if (!remote || !Object.keys(remote).length) {
+        console.log('[finance sync] nothing in Supabase yet — will push local data if any');
+        if (Object.keys(collectAll()).length) schedulePush();
+        return;
+      }
+      console.log('[finance sync] pulled', Object.keys(remote).length, 'keys from Supabase');
+      let changed = false;
+      for (const k of Object.keys(remote)) {
+        if (!isFinKey(k)) continue;
+        const v = JSON.stringify(remote[k]);
+        if (localStorage.getItem(k) !== v) { _origSet(k, v); changed = true; }
+      }
+      lastJson = JSON.stringify(remote);
+      if (changed) { console.log('[finance sync] applied remote data, reloading'); window.location.reload(); }
+      else { console.log('[finance sync] already up to date'); }
+    } catch (e) { console.warn('[finance sync] pull error', e.message); }
+  }
+
+  // Flush on tab close (keepalive so it survives navigation)
+  function flushSync() {
+    const state = collectAll();
+    const j = JSON.stringify(state);
+    if (j === lastJson) return;
+    fetch(SB_URL + '/rest/v1/app_state?on_conflict=key', {
+      method: 'POST', keepalive: true,
+      headers: {
+        'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+        'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify({ key: ROW, data: state, updated_at: new Date().toISOString() }),
+    }).catch(() => {});
+  }
+
+  document.addEventListener('DOMContentLoaded', pull);
+  window.addEventListener('beforeunload', flushSync);
+  window.addEventListener('pagehide', flushSync);
+})();
 </script>
 </body>
 </html>
