@@ -11,8 +11,8 @@
   'use strict';
 
   // -------- Supabase config (replace with your own project URL + publishable key) --------
-  const TOPBAR_SUPABASE_URL = 'https://dnpoylwzgxfpzawbdxdg.supabase.co';
-  const TOPBAR_SUPABASE_KEY = 'sb_publishable_9nJ5thXe-ijR5hqeYfH91g_YXFJxDsx';
+  const TOPBAR_SUPABASE_URL = 'https://cjutoprytdsdtrspgblo.supabase.co';
+  const TOPBAR_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqdXRvcHJ5dGRzZHRyc3BnYmxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjk1ODIsImV4cCI6MjA5NTkwNTU4Mn0.fMUN3LFNHFEA8OjqA8WjHRilBi_LVXgvp23H9WZcscI';
 
   // -------- CSS --------
   const css = `
