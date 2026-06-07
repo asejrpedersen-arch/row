@@ -249,7 +249,7 @@ body::after { content: ''; position: fixed; inset: 0; background-image: radial-g
 // ─── Keys & constants ──────────────────────────────────────────
 const LOG_KEY    = 'caf:logs';
 const CUSTOM_KEY = 'caf:custom';
-const HLF = 5;      // caffeine half-life hours
+let   HLF = 5;       // caffeine half-life hours — updated from profile at render time
 const PEAK = 0.75;  // peak absorption at 45 min
 const CLEAR_THR = 10; // mg below which we say "cleared"
 
@@ -290,14 +290,29 @@ function sleepScore(e) {
   return clamp(Math.round(dur*.5+dQ*.25+rQ*.25-Math.min(20,Math.round((e.awake||0)/5))),0,100);
 }
 
-// ─── Body weight ───────────────────────────────────────────────
-function loadWeightKg() {
+// ─── Profile (weight, age, sex) ────────────────────────────────
+function loadProfile() {
   try {
     const s = JSON.parse(localStorage.getItem('po_water_v1') || '{}');
     let kg = s.profile?.weightKg || 75;
     if (s.weightUnit === 'lb') kg /= 2.20462;
-    return kg;
-  } catch { return 75; }
+    return { kg, age: s.profile?.age || null, sex: s.profile?.sex || null };
+  } catch { return { kg: 75, age: null, sex: null }; }
+}
+function loadWeightKg() { return loadProfile().kg; }
+
+// Personalised half-life:
+//   Base 5h, slower with age (liver enzyme activity declines),
+//   slightly slower for females on average.
+function cafHalfLife(age, sex) {
+  let h = 5;
+  if (age) {
+    if      (age < 30) h -= 0.5;   // faster metabolism when young
+    else if (age >= 65) h += 2.0;  // significantly slower in older adults
+    else if (age >= 50) h += 1.5;  // noticeably slower from 50+
+  }
+  if (sex === 'f') h += 0.5;       // women metabolise ~10–15% slower on average
+  return Math.round(h * 10) / 10;  // round to 1dp for display
 }
 
 // ─── Pharmacokinetics ──────────────────────────────────────────
@@ -585,8 +600,13 @@ function renderToday() {
   document.getElementById('todayActive').innerHTML =
     `<span style="font-weight:700;color:var(--caf)">${Math.round(active)} mg active now</span> — will halve around ${halfGoneAt}`;
 
-  const target = Math.round(kg * 3);
-  let note = `Personal target ≈ ${target} mg/day (3 mg/kg at ${Math.round(kg)} kg). FDA ceiling is 400 mg.`;
+  const profile2 = loadProfile();
+  const target = Math.round(profile2.kg * 3);
+  let note = `Personal target ≈ ${target} mg/day (3 mg/kg at ${Math.round(profile2.kg)} kg) · half-life ${HLF}h`;
+  if (profile2.age) note += ` (age ${profile2.age}`;
+  if (profile2.sex) note += (profile2.age ? ', ' : ' (') + (profile2.sex === 'f' ? 'female' : 'male');
+  if (profile2.age || profile2.sex) note += ')';
+  note += '. FDA ceiling 400 mg.';
   if (sc !== null && sc < 50)      note += ` Sleep score ${sc} — ceiling reduced to 200 mg.`;
   else if (sc !== null && sc < 70) note += ` Sleep score ${sc} — ceiling reduced to 300 mg.`;
   document.getElementById('todayNote').textContent = note;
@@ -677,6 +697,10 @@ function renderDrinkGrid(filter='') {
 
 // ─── Master render ─────────────────────────────────────────────
 function renderAll() {
+  // Update half-life from profile before any calculation
+  const profile = loadProfile();
+  HLF = cafHalfLife(profile.age, profile.sex);
+
   const sleep = loadSleepEntry();
   const wakeH = parseSleepHour(sleep?.waketime) ?? 7;
   const bedH  = parseSleepHour(sleep?.bedtime)  ?? 23;
